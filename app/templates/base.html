@@ -5,11 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>{% block title %}RunPod credit signup{% endblock %}</title>
-<link rel="stylesheet" href="/static/style.css">
+<meta name="description" content="Sign up at the Coffee and Code AI Agent Hackathon for a $15 RunPod credit and a spot in the swag raffle.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Coffee and Code AI Agent Hackathon">
+<meta property="og:description" content="Grab your $15 RunPod credit and enter the swag raffle.">
+<link rel="stylesheet" href="{{ asset('style.css') }}">
 </head>
 <body>
 <main class="card">
   <p class="brand">Coffee and Code AI Agent Hackathon</p>
+  {% if step is defined %}
   <ol class="progress" aria-label="Progress">
     {% for n, label in [(1, 'Discord'), (2, 'Email'), (3, 'Credit')] %}
     <li class="{% if step == n %}current{% elif step > n %}done{% endif %}"
@@ -19,7 +24,9 @@
     </li>
     {% endfor %}
   </ol>
+  {% endif %}
   {% block content %}{% endblock %}
 </main>
+<script src="{{ asset('form.js') }}" defer></script>
 </body>
 </html>

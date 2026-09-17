@@ -2,7 +2,7 @@ import re
 
 from app import db
 
-from .conftest import rows
+from .conftest import rows, walk
 
 LINK_RE = re.compile(r'class="linkbox" href="([^"]+)"')
 
@@ -15,7 +15,8 @@ def load_links(client, auth, count=3):
 
 
 def submit(client, email, discord=""):
-    return client.post("/claim", data={"email": email, "discord_username": discord})
+    """An attendee always arrives at the claim step through the form."""
+    return walk(client, email, discord)
 
 
 def test_three_pages_walk_through(client, auth):
@@ -28,8 +29,9 @@ def test_three_pages_walk_through(client, auth):
 
     page2 = client.post("/email", data={"discord_username": "cj_gg"})
     assert page2.status_code == 200
+    assert str(page2.url).endswith("/email")
+    assert page2.request.method == "GET", "the form must redirect rather than render the POST"
     assert "cj_gg" in page2.text
-    assert 'name="discord_username" value="cj_gg"' in page2.text
 
     page3 = submit(client, "attendee@example.com", "cj_gg")
     assert page3.status_code == 200
@@ -88,11 +90,20 @@ def test_bad_email_is_rejected_and_claims_nothing(client, auth):
     assert db.stats()["links_claimed"] == 0
 
 
-def test_health_reports_pool_and_configuration(client, auth):
+def test_health_is_liveness_only_without_the_admin_token(client, auth):
+    """A stranger must not learn how many credits are left."""
     load_links(client, auth, count=2)
     submit(client, "one@example.com")
-    body = client.get("/health").json()
-    assert body == {
+    assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/health", headers={"Authorization": "Bearer wrong"}).json() == {
+        "status": "ok"
+    }
+
+
+def test_health_reports_pool_and_configuration_to_the_admin(client, auth):
+    load_links(client, auth, count=2)
+    submit(client, "one@example.com")
+    assert client.get("/health", headers=auth).json() == {
         "status": "ok",
         "links_total": 2,
         "links_remaining": 1,
@@ -111,10 +122,10 @@ def test_result_page_offers_the_link_and_a_copy_control(client, auth):
 
 def test_stylesheet_is_served_and_pulls_nothing_external(client):
     page = client.get("/").text
-    assert '<link rel="stylesheet" href="/static/style.css">' in page
+    assert '<link rel="stylesheet" href="/static/style.css?v=' in page
     assert "//fonts." not in page
     assert "cdn" not in page.lower()
-    css = client.get("/static/style.css")
+    css = client.get("/static/style.css")  # the hash is a cache buster, not a path
     assert css.status_code == 200
     assert "@import" not in css.text
     assert "http://" not in css.text and "https://" not in css.text
@@ -126,9 +137,9 @@ def test_no_em_dashes_in_any_rendered_copy(client, auth):
         client.get("/").text,
         client.post("/email", data={"discord_username": "cj"}).text,
         submit(client, "dash@example.com").text,
-        client.post("/claim", data={"email": "bad"}).text,
+        submit(client, "bad").text,
     ]
     client.post("/admin/allowed-emails", headers=auth, content="only@example.com")
-    pages.append(client.post("/claim", data={"email": "nope@example.com"}).text)
+    pages.append(submit(client, "nope@example.com").text)
     for body in pages:
         assert "—" not in body

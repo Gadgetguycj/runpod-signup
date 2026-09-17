@@ -1,4 +1,4 @@
-from .conftest import rows
+from .conftest import rows, walk
 
 
 def test_page_one_view_is_recorded(client, data_dir):
@@ -31,7 +31,7 @@ def test_ipv6_visitor_is_recorded_as_a_64(client, data_dir):
 def test_later_pages_do_not_add_visits(client, data_dir):
     client.get("/")
     client.post("/email", data={"discord_username": "x"})
-    client.post("/claim", data={"email": "a@b.example"})
+    client.post("/claim", data={"email": "a@b.example"})  # no session, bounces home
     assert rows(data_dir, "SELECT COUNT(*) AS n FROM visits")[0]["n"] == 1
 
 

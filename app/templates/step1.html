@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
+{% if restart %}
+<p class="error" role="alert">
+  Please start here. Your browser needs cookies switched on for this page. If they are
+  off, come to the GalaxyGate table and we will sign you up.
+</p>
+{% endif %}
 <h1>Join the raffle, optional</h1>
 <p class="lead">
   Hopping into the RunPod Discord is optional. You can skip it and still get your credit
@@ -18,7 +24,7 @@
 
 <form method="post" action="/email">
   <label for="discord_username">Discord username, optional</label>
-  <input id="discord_username" name="discord_username" type="text"
+  <input id="discord_username" name="discord_username" type="text" maxlength="64"
          autocomplete="off" autocapitalize="none" spellcheck="false"
          inputmode="text" placeholder="yourname" value="{{ discord or '' }}">
   <p class="help">Only used to match you to the swag raffle. Leave it blank if you prefer.</p>

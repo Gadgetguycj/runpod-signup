@@ -8,6 +8,8 @@
 
 <p class="note">This link is yours alone. It works once, so do not share it.</p>
 <p class="note good">You are in the raffle for RunPod swag.</p>
+<p class="carried">We have you as <strong>{{ email }}</strong></p>
+<a class="back" href="/">That is wrong, start over</a>
 
-<script src="/static/copy.js" defer></script>
+<script src="{{ asset('copy.js') }}" defer></script>
 {% endblock %}

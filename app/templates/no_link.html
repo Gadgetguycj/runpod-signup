@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>You are on the list</h1>
-<p class="lead">Your raffle spot is recorded.</p>
-<p class="note">Every credit link on hand is taken right now. Yours will be emailed to you.</p>
-<p class="note good">Come say hello at the GalaxyGate table.</p>
+<p class="lead">Your spot in the raffle is recorded.</p>
+<p class="carried">We have you as <strong>{{ email }}</strong></p>
+<p class="note">Your $15 credit link is not ready yet.</p>
+<p class="note good">Ask at the GalaxyGate table and we will get you one.</p>
+<a class="back" href="/">That is wrong, start over</a>
 {% endblock %}

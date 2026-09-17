@@ -2,6 +2,8 @@ import re
 
 from app import db
 
+from .conftest import walk
+
 LINK_RE = re.compile(r'class="linkbox" href="([^"]+)"')
 
 
@@ -13,7 +15,7 @@ def load(client, auth, count=3):
 def test_empty_allowlist_allows_anybody(client, auth):
     load(client, auth)
     assert db.allowlist_count() == 0
-    response = client.post("/claim", data={"email": "stranger@example.com"})
+    response = walk(client, "stranger@example.com")
     assert LINK_RE.search(response.text) is not None
     assert db.stats()["links_claimed"] == 1
 
@@ -25,7 +27,7 @@ def test_populated_allowlist_blocks_an_unknown_address(client, auth):
     assert imported.status_code == 200
     assert db.allowlist_count() == 1
 
-    blocked = client.post("/claim", data={"email": "stranger@example.com"})
+    blocked = walk(client, "stranger@example.com")
     assert blocked.status_code == 200
     assert "do not have that address" in blocked.text
     assert LINK_RE.search(blocked.text) is None
@@ -36,6 +38,6 @@ def test_populated_allowlist_blocks_an_unknown_address(client, auth):
 def test_populated_allowlist_admits_a_listed_alias(client, auth):
     load(client, auth)
     client.post("/admin/allowed-emails", headers=auth, content="Invited.Person+conf@gmail.com\n")
-    allowed = client.post("/claim", data={"email": "invitedperson@googlemail.com"})
+    allowed = walk(client, "invitedperson@googlemail.com")
     assert LINK_RE.search(allowed.text) is not None
     assert db.stats()["links_claimed"] == 1

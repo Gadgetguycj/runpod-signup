@@ -1,7 +1,7 @@
 import csv
 import io
 
-from .conftest import ADMIN_TOKEN
+from .conftest import ADMIN_TOKEN, walk
 
 ADMIN_GETS = ["/admin/stats", "/admin/entries.csv"]
 ADMIN_POSTS = ["/admin/links", "/admin/allowed-emails"]
@@ -27,7 +27,7 @@ def test_admin_is_503_when_admin_token_is_unset(client_no_admin):
         assert "ADMIN_TOKEN" in response.text
     for path in ADMIN_POSTS:
         assert client_no_admin.post(path, content="x").status_code == 503, path
-    assert client_no_admin.get("/health").json()["admin_configured"] is False
+    assert client_no_admin.get("/health").json() == {"status": "ok"}
 
 
 def test_link_import_counts_added_and_skipped(client, auth):
@@ -48,11 +48,11 @@ def test_allowed_email_import_normalizes(client, auth):
 def test_stats_and_csv_export(client, auth):
     client.post("/admin/links", headers=auth, content="https://a.example/1\nhttps://a.example/2")
     client.get("/")
-    client.post("/claim", data={"email": "Draw.Me+x@gmail.com", "discord_username": "drawme"})
+    walk(client, "Draw.Me+x@gmail.com", "drawme")
 
     stats = client.get("/admin/stats", headers=auth).json()
-    assert stats == {"visits": 1, "entries": 1, "links_total": 2, "links_claimed": 1,
-                     "links_remaining": 1}
+    assert {k: v for k, v in stats.items() if k != "handout"} == {
+        "visits": 1, "entries": 1, "links_total": 2, "links_claimed": 1, "links_remaining": 1}
 
     export = client.get("/admin/entries.csv", headers=auth)
     assert export.headers["content-type"].startswith("text/csv")

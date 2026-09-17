@@ -12,10 +12,18 @@ rendered, no build step, no client framework, no external fonts or CDNs.
 
 1. `GET /` Discord step. The raffle is optional. Invite button plus an optional
    Discord username field. The view is recorded in `visits`.
-2. `POST /email` Email step. Shows the Discord username carried over in a hidden field.
-3. `POST /claim` Result. Shows the personal credit link, or the "you are on the list"
-   page when the pool is empty, or the "we do not have that address" page when the
+2. `POST /email` then `303` to `GET /email`. The email step. The Discord username is
+   carried in a signed session cookie.
+3. `POST /claim` then `303` to `GET /claim`. The result. Shows the personal credit link,
+   or the "you are on the list" page, or the "we do not have that address" page when the
    allowlist is populated and does not contain the address.
+
+Every form posts and then redirects, so a reload or a back-then-forward re-fetches the
+page instead of re-posting. `GET /email` and `GET /claim` render from the session, so a
+visitor who types the URL or comes back through history sees their own page. Without a
+session they are redirected to `/`. No browser ever sees raw JSON. A 404 or a wrong
+method renders the branded error page, and an admin route hit from a browser renders it
+too, while a tool that does not ask for HTML still gets JSON.
 
 ## Environment variables
 
@@ -23,7 +31,14 @@ rendered, no build step, no client framework, no external fonts or CDNs.
 | --- | --- | --- |
 | `DISCORD_INVITE_URL` | unset | The Discord button target. Unset renders the button disabled with the text "Invite link coming soon" and logs a warning at startup. |
 | `ADMIN_TOKEN` | unset | Bearer token for every `/admin` route. Unset makes the whole admin surface return 503 and say why. |
-| `DATA_DIR` | `/data` | Directory holding `signup.db`. Mount a volume here. |
+| `DATA_DIR` | `/data` | Directory holding `signup.db` and `secret.key`. Mount a volume here. |
+| `SECRET_KEY` | generated | Signs the session cookie. Unset means one is generated on first start and kept in `DATA_DIR/secret.key`, so a restart does not log everybody out. |
+| `CLAIM_RATE_LIMIT_PER_HOUR` | `120` | Most links one truncated client address may take per hour. |
+| `GLOBAL_CLAIM_LIMIT_PER_HOUR` | `150` | Most links the whole site may hand out per hour. |
+| `CLAIMS_OPEN` | `open` | Set to `closed` to pause handouts while still recording entries. |
+
+A non-positive or unparseable number falls back to the default and logs a warning, so a
+typo cannot switch protection off or stop every handout.
 
 Copy `.env.example` to `.env` for a local run.
 
@@ -42,6 +57,50 @@ this up, one so a link can have only one owner and one so an entry can hold only
 link. A returning address gets its original link back. When no link is left the entry
 is still recorded and the page says the credit will be emailed. No link is ever
 invented.
+
+## Handout controls
+
+The pool is roughly 200 single use links. The site is public, so the one link per person
+rule is not enough on its own. It stops one person taking two. It does nothing against a
+script that invents a fresh address per request. Four things sit in front of the pool.
+
+**A claim has to come from a session that started on the form.** The cookie is issued at
+the email step and signed with HMAC-SHA256. A bare request loop against `/claim` gets
+sent back to page 1 and takes nothing. This costs a real attendee nothing, because they
+always walk the form. A scripted browser can still walk it, which is what the limits
+below are for.
+
+**A per address limit**, keyed on the same truncated client address the visit log uses,
+so a /24 for IPv4 and a /64 for IPv6.
+
+**A site wide cap per hour**, the circuit breaker. When it trips it logs at warning level
+with the word `CIRCUIT BREAKER TRIPPED`.
+
+**`CLAIMS_OPEN`**, which pauses handouts without taking the site down.
+
+None of these ever show a visitor an error. When any of them withholds a link, the entry
+is still recorded, the raffle still counts them, and they see the same "you are on the
+list" page as an empty pool. Someone who already holds a link always gets it back, is
+never rate limited, and never burns quota, so reloading costs an attendee nothing.
+
+### How the defaults were chosen
+
+A whole room behind one venue NAT is a single truncated address. That is the constraint
+that sets the numbers.
+
+| Setting | Default | Why |
+| --- | --- | --- |
+| `CLAIM_RATE_LIMIT_PER_HOUR` | 120 | Sized for a room, not a person. A 120 person room scanning the QR at once from one venue NAT all get links. A single source script is capped at 120 an hour instead of the whole pool in seconds. |
+| `GLOBAL_CLAIM_LIMIT_PER_HOUR` | 150 | Above the per address limit, so a single source binds on its own limit first. Three quarters of a 200 link pool, so at least 50 links survive any one hour of abuse. |
+
+Raise `CLAIM_RATE_LIMIT_PER_HOUR` if the room is bigger than 120 people on one wifi.
+Watch `handout` in `/admin/stats` during the event.
+
+Be clear about what these do and do not do. A determined attacker with a scripted browser
+and many source addresses is bounded by the site wide cap, not stopped by it. What stops
+that is a human seeing the loud log line or the `/admin/stats` numbers and setting
+`CLAIMS_OPEN=closed`. The limits exist to slow a drain down and raise the alarm, not to
+be a wall.
 
 ## Allowed emails
 
@@ -115,11 +174,28 @@ curl -sS -X POST http://localhost:8000/admin/allowed-emails \
 # {"added":42,"skipped":3}
 ```
 
-Stats:
+Stats, including the handout controls:
 
 ```
 curl -sS http://localhost:8000/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
-# {"visits":128,"entries":41,"links_total":50,"links_claimed":41,"links_remaining":9}
+```
+
+```json
+{
+  "visits": 128,
+  "entries": 41,
+  "links_total": 50,
+  "links_claimed": 41,
+  "links_remaining": 9,
+  "handout": {
+    "claims_open": true,
+    "per_address_limit_per_hour": 120,
+    "global_limit_per_hour": 150,
+    "claimed_last_hour": 41,
+    "breaker_tripped": false,
+    "busiest_addresses_last_hour": [{"ip_key": "203.0.113.0", "claims": 39}]
+  }
+}
 ```
 
 Raffle draw list as CSV:
@@ -133,10 +209,20 @@ head -2 raffle.csv
 Columns are `raw_email`, `normalized_email`, `discord_username`, `claimed_link`,
 `created_at`, `link_claimed_at`.
 
-Health, which needs no token:
+Pause and resume handouts without a restart, if you run it under compose:
+
+```
+docker compose run --rm -e CLAIMS_OPEN=closed runpod-signup   # or set it and recreate
+```
+
+Health. Without a token it is liveness only, because the pool size is not a stranger's
+business. With the admin token it carries the counts:
 
 ```
 curl -sS http://localhost:8000/health
+# {"status":"ok"}
+
+curl -sS http://localhost:8000/health -H "Authorization: Bearer $ADMIN_TOKEN"
 # {"status":"ok","links_total":3,"links_remaining":2,"discord_invite_set":true,"admin_configured":true}
 ```
 
@@ -174,5 +260,7 @@ That request is stored as `144.172.70.0` with country `US`.
 .venv/bin/python -m pytest -q
 ```
 
-Covers the normalization alias table, the returning visitor, concurrent claims,
-the empty pool, the allowlist in both states, admin 401 and 503, and visit recording.
+Covers the normalization alias table, the returning visitor, concurrent claims, the
+empty pool, the allowlist in both states, admin 401 and 503, visit recording, the words
+on the empty pool page, browser back and reload and typed URLs, and the handout controls
+including a scripted loop against a normal attendee.

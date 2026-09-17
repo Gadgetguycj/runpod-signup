@@ -46,3 +46,14 @@ def rows(data_dir, sql, params=()):
         return conn.execute(sql, params).fetchall()
     finally:
         conn.close()
+
+
+def start_session(client, discord="", headers=None):
+    """Page one to the email step. This is what issues the session cookie."""
+    return client.post("/email", data={"discord_username": discord}, headers=headers or {})
+
+
+def walk(client, email, discord="", headers=None):
+    """Walk the form the way an attendee does, then submit the email."""
+    start_session(client, discord, headers)
+    return client.post("/claim", data={"email": email}, headers=headers or {})

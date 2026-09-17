@@ -28,8 +28,10 @@ body {
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 20px 14px 48px;
+  /* Centred so a short page does not leave a void that reads as a failed load.
+     The top padding keeps tall content starting at the top on small screens. */
+  align-items: center;
+  padding: 24px 14px;
 }
 
 .card {
@@ -130,6 +132,11 @@ label {
   font-weight: 600;
 }
 
+::placeholder {
+  color: #7e8698;
+  opacity: 1;
+}
+
 input[type="text"], input[type="email"] {
   width: 100%;
   min-height: 56px;
@@ -199,14 +206,17 @@ input:focus-visible, .button:focus-visible, a:focus-visible {
 .note.good { color: var(--accent); }
 
 .back {
-  display: inline-block;
-  margin-top: 20px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 8px 12px 8px 0;
   color: var(--muted);
   font-size: 15px;
 }
 
 @media (max-width: 380px) {
-  body { padding: 14px 10px 36px; }
+  body { padding: 16px 10px; }
   .card { padding: 18px 14px 24px; border-radius: 16px; }
   h1 { font-size: 23px; }
   .progress .label { font-size: 11px; }

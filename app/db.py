@@ -2,7 +2,7 @@
 
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .emails import normalize_email
@@ -39,6 +39,15 @@ CREATE TABLE IF NOT EXISTS visits (
     country TEXT
 );
 
+CREATE TABLE IF NOT EXISTS claim_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    ip_key TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS claim_events_recent ON claim_events(created_at);
+CREATE INDEX IF NOT EXISTS claim_events_by_ip ON claim_events(ip_key, created_at);
+
 CREATE UNIQUE INDEX IF NOT EXISTS links_one_owner
     ON links(claimed_by_entry_id) WHERE claimed_by_entry_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS entries_one_link
@@ -56,6 +65,10 @@ def db_path() -> Path:
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def hour_ago() -> str:
+    return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
 
 
 def connect() -> sqlite3.Connection:
@@ -120,16 +133,28 @@ def is_allowed(normalized: str) -> bool:
         conn.close()
 
 
-def claim(raw_email: str, discord_username: str | None) -> dict:
+def claim(
+    raw_email: str,
+    discord_username: str | None,
+    ip_key: str = "unknown",
+    per_ip_limit: int = 0,
+    global_limit: int = 0,
+    claims_open: bool = True,
+) -> dict:
     """Record the entry and hand out at most one link, atomically.
 
-    Returns a dict with keys entry_id, link_url, returning and link_claimed_at.
-    link_url is None when the pool is empty. The whole read-modify-write runs
-    inside one BEGIN IMMEDIATE transaction so two simultaneous submits cannot
-    take the same link.
+    The whole read-modify-write runs inside one BEGIN IMMEDIATE transaction, so two
+    simultaneous submits cannot take the same link and a burst cannot slip past the
+    rate limit by all reading a stale count.
+
+    Someone who already holds a link always gets it back. They are never rate limited
+    and never counted, so reloading costs an attendee nothing. The gates below only
+    decide whether a NEW link leaves the pool. An entry is always recorded either way,
+    so the raffle is never affected and no visitor is ever refused.
     """
     normalized = normalize_email(raw_email)
     conn = connect()
+    gate = None
     try:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
@@ -154,6 +179,8 @@ def claim(raw_email: str, discord_username: str | None) -> dict:
                 )
 
         if link_id is None:
+            gate = _handout_gate(conn, ip_key, per_ip_limit, global_limit, claims_open)
+        if link_id is None and gate is None:
             free = conn.execute(
                 "SELECT id, url FROM links WHERE claimed_by_entry_id IS NULL ORDER BY id LIMIT 1"
             ).fetchone()
@@ -168,7 +195,13 @@ def claim(raw_email: str, discord_username: str | None) -> dict:
                     "UPDATE entries SET link_id = ?, link_claimed_at = ? WHERE id = ?",
                     (free["id"], stamp, entry_id),
                 )
+                conn.execute(
+                    "INSERT INTO claim_events (created_at, ip_key) VALUES (?, ?)",
+                    (stamp, ip_key or "unknown"),
+                )
                 link_id = free["id"]
+            else:
+                gate = "pool_empty"
 
         link = None
         claimed_at = None
@@ -178,6 +211,7 @@ def claim(raw_email: str, discord_username: str | None) -> dict:
             ).fetchone()
             link = found["url"]
             claimed_at = found["claimed_at"]
+            gate = None
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -190,7 +224,62 @@ def claim(raw_email: str, discord_username: str | None) -> dict:
         "link_url": link,
         "returning": returning,
         "link_claimed_at": claimed_at,
+        "withheld_because": gate,
     }
+
+
+def _handout_gate(conn, ip_key, per_ip_limit, global_limit, claims_open) -> str | None:
+    """Why a new link must not leave the pool right now, or None to allow it.
+
+    Runs inside the caller's BEGIN IMMEDIATE transaction.
+    """
+    if not claims_open:
+        return "claims_closed"
+    since = hour_ago()
+    if global_limit > 0:
+        total = conn.execute(
+            "SELECT COUNT(*) AS n FROM claim_events WHERE created_at >= ?", (since,)
+        ).fetchone()["n"]
+        if total >= global_limit:
+            return "global_limit"
+    if per_ip_limit > 0:
+        mine = conn.execute(
+            "SELECT COUNT(*) AS n FROM claim_events WHERE ip_key = ? AND created_at >= ?",
+            (ip_key or "unknown", since),
+        ).fetchone()["n"]
+        if mine >= per_ip_limit:
+            return "ip_limit"
+    return None
+
+
+def claims_in_last_hour(ip_key: str | None = None) -> int:
+    conn = connect()
+    try:
+        if ip_key is None:
+            return conn.execute(
+                "SELECT COUNT(*) AS n FROM claim_events WHERE created_at >= ?", (hour_ago(),)
+            ).fetchone()["n"]
+        return conn.execute(
+            "SELECT COUNT(*) AS n FROM claim_events WHERE ip_key = ? AND created_at >= ?",
+            (ip_key, hour_ago()),
+        ).fetchone()["n"]
+    finally:
+        conn.close()
+
+
+def busiest_addresses_last_hour(limit: int = 5) -> list[dict]:
+    conn = connect()
+    try:
+        return [
+            dict(row)
+            for row in conn.execute(
+                "SELECT ip_key, COUNT(*) AS claims FROM claim_events WHERE created_at >= ?"
+                " GROUP BY ip_key ORDER BY claims DESC, ip_key LIMIT ?",
+                (hour_ago(), limit),
+            )
+        ]
+    finally:
+        conn.close()
 
 
 def import_links(text: str) -> dict:
@@ -282,5 +371,20 @@ def export_entries() -> list[sqlite3.Row]:
             " l.url AS claimed_link, e.created_at, e.link_claimed_at"
             " FROM entries e LEFT JOIN links l ON l.id = e.link_id ORDER BY e.id"
         ).fetchall()
+    finally:
+        conn.close()
+
+
+def find_entry(normalized: str) -> dict | None:
+    """The entry for a normalized address, with its link when one is held."""
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT e.raw_email, e.normalized_email, e.discord_username, l.url AS link_url"
+            " FROM entries e LEFT JOIN links l ON l.id = e.link_id"
+            " WHERE e.normalized_email = ?",
+            (normalized,),
+        ).fetchone()
+        return dict(row) if row else None
     finally:
         conn.close()
