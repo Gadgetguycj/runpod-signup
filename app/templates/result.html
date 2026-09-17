@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{% if returning %}Here is your link again{% else %}Your $15 RunPod credit{% endif %}</h1>
+<p class="lead">Tap the link to redeem it on RunPod.</p>
+
+<a class="linkbox" href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ link }}</a>
+<button class="button copy" type="button" data-link="{{ link }}">Copy link</button>
+
+<p class="note">This link is yours alone. It works once, so do not share it.</p>
+<p class="note good">You are in the raffle for RunPod swag.</p>
+
+<script src="/static/copy.js" defer></script>
+{% endblock %}

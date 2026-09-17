@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>{% block title %}RunPod credit signup{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main class="card">
+  <p class="brand">Coffee and Code AI Agent Hackathon</p>
+  <ol class="progress" aria-label="Progress">
+    {% for n, label in [(1, 'Discord'), (2, 'Email'), (3, 'Credit')] %}
+    <li class="{% if step == n %}current{% elif step > n %}done{% endif %}"
+        {% if step == n %}aria-current="step"{% endif %}>
+      <span class="dot">{{ n }}</span>
+      <span class="label">{{ label }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Join the raffle, optional</h1>
+<p class="lead">
+  Hopping into the RunPod Discord is optional. You can skip it and still get your credit
+  and a raffle spot.
+</p>
+
+{% if invite %}
+<a class="button discord" href="{{ invite }}" target="_blank" rel="noopener noreferrer">
+  Open the RunPod Discord
+</a>
+{% else %}
+<button class="button discord" type="button" disabled aria-disabled="true">
+  Invite link coming soon
+</button>
+{% endif %}
+
+<form method="post" action="/email">
+  <label for="discord_username">Discord username, optional</label>
+  <input id="discord_username" name="discord_username" type="text"
+         autocomplete="off" autocapitalize="none" spellcheck="false"
+         inputmode="text" placeholder="yourname" value="{{ discord or '' }}">
+  <p class="help">Only used to match you to the swag raffle. Leave it blank if you prefer.</p>
+  <button class="button primary" type="submit">Next</button>
+</form>
+{% endblock %}

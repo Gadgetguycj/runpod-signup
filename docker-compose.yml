@@ -1,0 +1,14 @@
+services:
+  runpod-signup:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      # A named volume inherits /data from the image, which is owned by uid 1000.
+      # A host bind mount does not, so chown it to 1000:1000 first if you use one.
+      - signup-data:/data
+    restart: unless-stopped
+
+volumes:
+  signup-data:
