@@ -2,7 +2,7 @@
 
 import re
 
-from .conftest import walk
+from .conftest import visible_text, walk
 
 BANNED_ON_THE_EMPTY_POOL_PAGE = [
     "email",  # the app has no mail path, so it must never promise one
@@ -44,7 +44,7 @@ def test_empty_pool_page_says_the_raffle_spot_is_recorded(client):
 
 
 def test_empty_pool_page_echoes_the_address_back(client):
-    assert "hopeful@example.com" in empty_pool_page(client)
+    assert "hopeful@example.com" in visible_text(empty_pool_page(client))
 
 
 def test_empty_pool_page_points_at_the_table_for_a_link(client):
@@ -60,7 +60,7 @@ def test_empty_pool_page_keeps_the_heading(client):
 def test_result_page_echoes_the_address_back(client, auth):
     client.post("/admin/links", headers=auth, content="https://runpod.io/redeem/1")
     body = walk(client, "Typo.Check@example.com").text
-    assert "Typo.Check@example.com" in body
+    assert "Typo.Check@example.com" in visible_text(body)
     assert "start over" in body
 
 

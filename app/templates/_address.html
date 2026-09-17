@@ -1,0 +1,17 @@
+{#- Cloudflare Email Address Obfuscation rewrites any text node that matches an email
+    address into the literal "[email protected]" plus a script that decodes it in the
+    browser. With JavaScript blocked, or if that script fails to load on venue wifi,
+    the attendee would read "[email protected]" on the one line that confirms their
+    entry took. Splitting the address across three text nodes means no single node
+    matches the pattern Cloudflare scans for. The reader still sees a normal address,
+    and because the spans are inline and adjacent with no whitespace between them, a
+    selection or a copy still yields the exact string. -#}
+{% macro address(value) -%}
+{%- set local = value.rpartition('@')[0] -%}
+{%- set domain = value.rpartition('@')[2] -%}
+{%- if local -%}
+<span class="address"><span>{{ local }}</span><span>@</span><span>{{ domain }}</span></span>
+{%- else -%}
+<span class="address">{{ value }}</span>
+{%- endif -%}
+{%- endmacro -%}

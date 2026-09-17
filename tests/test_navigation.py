@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from .conftest import start_session, walk
+from .conftest import start_session, visible_text, walk
 
 
 def load(client, auth, count=2):
@@ -47,7 +47,7 @@ def test_get_claim_re_renders_the_visitors_own_link(client, auth):
     reload = client.get("/claim")
     assert reload.status_code == 200
     assert "https://runpod.io/redeem/0" in reload.text
-    assert "reloader@example.com" in reload.text
+    assert "reloader@example.com" in visible_text(reload.text)
     assert client.get("/admin/stats", headers=auth).json()["links_claimed"] == 1
 
 
@@ -55,7 +55,7 @@ def test_get_claim_re_renders_the_empty_pool_page(client):
     walk(client, "onthelist@example.com")
     again = client.get("/claim")
     assert "You are on the list" in again.text
-    assert "onthelist@example.com" in again.text
+    assert "onthelist@example.com" in visible_text(again.text)
 
 
 def test_submitting_redirects_so_a_reload_does_not_repost(client, auth):

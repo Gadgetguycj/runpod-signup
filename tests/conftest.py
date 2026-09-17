@@ -1,5 +1,6 @@
 import os
 import sys
+from html.parser import HTMLParser
 
 import pytest
 from fastapi.testclient import TestClient
@@ -57,3 +58,35 @@ def walk(client, email, discord="", headers=None):
     """Walk the form the way an attendee does, then submit the email."""
     start_session(client, discord, headers)
     return client.post("/claim", data={"email": email}, headers=headers or {})
+
+
+class _Text(HTMLParser):
+    """Text nodes in document order, skipping script and style."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.nodes: list[str] = []
+        self._skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self._skip += 1
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self._skip:
+            self._skip -= 1
+
+    def handle_data(self, data):
+        if not self._skip:
+            self.nodes.append(data)
+
+
+def text_nodes(html: str) -> list[str]:
+    parser = _Text()
+    parser.feed(html)
+    return parser.nodes
+
+
+def visible_text(html: str) -> str:
+    """What a reader sees. The address is split across nodes in the markup."""
+    return "".join(text_nodes(html))

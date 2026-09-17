@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_address.html" import address %}
 {% block content %}
 <h1>{% if returning %}Here is your link again{% else %}Your $15 RunPod credit{% endif %}</h1>
 <p class="lead">Tap the link to redeem it on RunPod.</p>
@@ -8,7 +9,7 @@
 
 <p class="note">This link is yours alone. It works once, so do not share it.</p>
 <p class="note good">You are in the raffle for RunPod swag.</p>
-<p class="carried">We have you as <strong>{{ email }}</strong></p>
+<p class="carried">We have you as <strong>{{ address(email) }}</strong></p>
 <a class="back" href="/">That is wrong, start over</a>
 
 <script src="{{ asset('copy.js') }}" defer></script>
