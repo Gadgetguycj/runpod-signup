@@ -172,9 +172,13 @@ def claim(
         else:
             entry_id = row["id"]
             link_id = row["link_id"]
+            # The Discord username is the raffle entry, so a mistyped one has to be
+            # correctable by redoing the form. A later non-empty username replaces the
+            # stored one. A later empty one leaves it alone, so someone re-submitting
+            # only to see their code again does not lose their raffle entry.
             if discord_username and discord_username.strip():
                 conn.execute(
-                    "UPDATE entries SET discord_username = ? WHERE id = ? AND discord_username IS NULL",
+                    "UPDATE entries SET discord_username = ? WHERE id = ?",
                     (discord_username.strip(), entry_id),
                 )
 
