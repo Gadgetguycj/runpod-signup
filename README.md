@@ -10,8 +10,8 @@ rendered, no build step, no client framework, no external fonts or CDNs.
 
 ## The flow
 
-1. `GET /` Discord step. The raffle is optional. Invite button plus an optional
-   Discord username field. The view is recorded in `visits`.
+1. `GET /` Discord step. Invite button plus a Discord username field. The username is
+   the raffle entry. The view is recorded in `visits`.
 2. `POST /email` then `303` to `GET /email`. The email step. The Discord username is
    carried in a signed session cookie.
 3. `POST /claim` then `303` to `GET /claim`. The result. Shows the personal credit link,
@@ -206,8 +206,13 @@ curl -sS http://localhost:8000/admin/entries.csv \
 head -2 raffle.csv
 ```
 
-Columns are `raw_email`, `normalized_email`, `discord_username`, `claimed_link`,
-`created_at`, `link_claimed_at`.
+Columns are `raw_email`, `normalized_email`, `discord_username`, `in_raffle`,
+`claimed_link`, `created_at`, `link_claimed_at`.
+
+The raffle entry is the Discord username, not the email. The email only pins a credit
+link to a person. `discord_username` is empty when none was given and `in_raffle` is
+then `no`, so the draw list is every row where `in_raffle` is `yes`. `/admin/stats`
+carries the same split as `raffle_entries` and `entries_without_discord`.
 
 Pause and resume handouts without a restart, if you run it under compose:
 

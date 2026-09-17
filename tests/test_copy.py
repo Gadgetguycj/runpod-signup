@@ -23,11 +23,8 @@ def empty_pool_page(client) -> str:
 
 
 def body_copy(html: str) -> str:
-    """Just the words, with markup and the fixed page furniture stripped out."""
-    text = re.sub(r"<script.*?</script>", " ", html, flags=re.S)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.split("Credit", 1)[-1].lower()
+    """Just the words a reader sees, lowercased."""
+    return re.sub(r"\s+", " ", visible_text(html)).lower()
 
 
 def test_empty_pool_page_never_promises_an_email(client):
@@ -35,12 +32,6 @@ def test_empty_pool_page_never_promises_an_email(client):
     copy = body_copy(empty_pool_page(client))
     for word in BANNED_ON_THE_EMPTY_POOL_PAGE:
         assert word not in copy, f"the empty pool page says {word!r}"
-
-
-def test_empty_pool_page_says_the_raffle_spot_is_recorded(client):
-    copy = body_copy(empty_pool_page(client))
-    assert "raffle" in copy
-    assert "recorded" in copy
 
 
 def test_empty_pool_page_echoes_the_address_back(client):

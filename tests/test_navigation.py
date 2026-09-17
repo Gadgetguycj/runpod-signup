@@ -19,7 +19,7 @@ def test_typed_url_without_a_session_redirects_home(client, path):
     response = client.get(path)
     assert response.status_code == 200
     assert str(response.url).endswith("/")
-    assert "Join the raffle" in response.text
+    assert "Join the Raffle" in response.text
     assert "Method Not Allowed" not in response.text
     assert "detail" not in response.text
 

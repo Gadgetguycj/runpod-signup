@@ -6,11 +6,7 @@
   off, come to the GalaxyGate table and we will sign you up.
 </p>
 {% endif %}
-<h1>Join the raffle, optional</h1>
-<p class="lead">
-  Hopping into the RunPod Discord is optional. You can skip it and still get your credit
-  and a raffle spot.
-</p>
+<h1>Join the Raffle <span class="qualifier">(Optional)</span></h1>
 
 {% if invite %}
 <a class="button discord" href="{{ invite }}" target="_blank" rel="noopener noreferrer">
@@ -23,11 +19,11 @@
 {% endif %}
 
 <form method="post" action="/email">
-  <label for="discord_username">Discord username, optional</label>
+  <label for="discord_username">Discord username</label>
   <input id="discord_username" name="discord_username" type="text" maxlength="64"
          autocomplete="off" autocapitalize="none" spellcheck="false"
          inputmode="text" placeholder="yourname" value="{{ discord or '' }}">
-  <p class="help">Only used to match you to the swag raffle. Leave it blank if you prefer.</p>
+  <p class="help">This is what enters you in the raffle.</p>
   <button class="button primary" type="submit">Next</button>
 </form>
 {% endblock %}

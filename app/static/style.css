@@ -4,6 +4,7 @@
   --edge: #2a3040;
   --text: #f2f4f8;
   --muted: #b9c0cf;
+  --quiet: #939cae;
   --accent: #6ee7a8;
   --accent-ink: #06210f;
   --discord: #5865f2;
@@ -51,57 +52,23 @@ body {
   color: var(--muted);
 }
 
-.progress {
-  display: flex;
-  gap: 8px;
-  list-style: none;
-  margin: 0 0 24px;
-  padding: 0;
-}
-
-.progress li {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  border-top: 3px solid var(--edge);
-  padding-top: 10px;
-}
-
-.progress .dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #202634;
-  border: 1px solid var(--edge);
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.progress .label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.progress li.current { border-top-color: var(--accent); }
-.progress li.current .dot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.progress li.current .label { color: var(--text); font-weight: 600; }
-.progress li.done { border-top-color: var(--accent); }
-.progress li.done .dot { background: #1d3a2a; border-color: var(--accent); color: var(--accent); }
-.progress li.done .label { color: var(--text); }
-
 h1 {
   margin: 0 0 10px;
   font-size: 26px;
   line-height: 1.2;
 }
 
+.qualifier {
+  font-size: 0.6em;
+  font-weight: 500;
+  color: var(--quiet);
+  white-space: nowrap;
+}
+
 .lead { margin: 0 0 20px; color: var(--muted); }
+
+/* Page one has no lead paragraph, so the heading would otherwise sit on the button. */
+h1 + .button { margin-top: 24px; }
 
 .button {
   display: flex;
@@ -219,6 +186,5 @@ input:focus-visible, .button:focus-visible, a:focus-visible {
   body { padding: 16px 10px; }
   .card { padding: 18px 14px 24px; border-radius: 16px; }
   h1 { font-size: 23px; }
-  .progress .label { font-size: 11px; }
   .linkbox { font-size: 16px; }
 }

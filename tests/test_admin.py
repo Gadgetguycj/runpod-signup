@@ -52,16 +52,17 @@ def test_stats_and_csv_export(client, auth):
 
     stats = client.get("/admin/stats", headers=auth).json()
     assert {k: v for k, v in stats.items() if k != "handout"} == {
-        "visits": 1, "entries": 1, "links_total": 2, "links_claimed": 1, "links_remaining": 1}
+        "visits": 1, "entries": 1, "raffle_entries": 1, "entries_without_discord": 0,
+        "links_total": 2, "links_claimed": 1, "links_remaining": 1}
 
     export = client.get("/admin/entries.csv", headers=auth)
     assert export.headers["content-type"].startswith("text/csv")
     table = list(csv.reader(io.StringIO(export.text)))
-    assert table[0] == ["raw_email", "normalized_email", "discord_username", "claimed_link",
-                        "created_at", "link_claimed_at"]
-    assert table[1][:4] == ["Draw.Me+x@gmail.com", "drawme@gmail.com", "drawme",
+    assert table[0] == ["raw_email", "normalized_email", "discord_username", "in_raffle",
+                        "claimed_link", "created_at", "link_claimed_at"]
+    assert table[1][:5] == ["Draw.Me+x@gmail.com", "drawme@gmail.com", "drawme", "yes",
                             "https://a.example/1"]
-    assert table[1][4] and table[1][5]
+    assert table[1][5] and table[1][6]
 
 
 def test_import_accepts_a_raw_body_labelled_as_form_encoded(client, auth):

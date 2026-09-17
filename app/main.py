@@ -153,7 +153,6 @@ def step_discord(request: Request, restart: str = ""):
     return page(
         request,
         "step1.html",
-        step=1,
         invite=config.discord_invite_url(),
         discord=session.get("d", ""),
         restart=bool(restart),
@@ -178,7 +177,6 @@ def step_email(request: Request):
     rendered = page(
         request,
         "step2.html",
-        step=2,
         discord=session.get("d", ""),
         email=typed,
         error=error,
@@ -236,7 +234,7 @@ def submit(request: Request, email: str = Form(...), discord_username: str = For
 def result(request: Request):
     session = read_session(request)
     if session.get("blocked"):
-        return page(request, "not_allowed.html", step=3, email=session["blocked"])
+        return page(request, "not_allowed.html", email=session["blocked"])
     normalized = session.get("e")
     if not normalized:
         return redirect(request, "/")
@@ -247,12 +245,17 @@ def result(request: Request):
         return page(
             request,
             "result.html",
-            step=3,
             link=entry["link_url"],
             email=entry["raw_email"],
+            discord=entry["discord_username"],
             returning=not session.get("new", False),
         )
-    return page(request, "no_link.html", step=3, email=entry["raw_email"])
+    return page(
+        request,
+        "no_link.html",
+        email=entry["raw_email"],
+        discord=entry["discord_username"],
+    )
 
 
 def email_problem(address: str) -> str | None:
@@ -380,6 +383,7 @@ def admin_entries_csv():
             "raw_email",
             "normalized_email",
             "discord_username",
+            "in_raffle",
             "claimed_link",
             "created_at",
             "link_claimed_at",
@@ -391,6 +395,7 @@ def admin_entries_csv():
                 row["raw_email"],
                 row["normalized_email"],
                 row["discord_username"] or "",
+                "yes" if row["discord_username"] else "no",
                 row["claimed_link"] or "",
                 row["created_at"],
                 row["link_claimed_at"] or "",

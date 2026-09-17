@@ -14,17 +14,6 @@
 <body>
 <main class="card">
   <p class="brand">Coffee and Code AI Agent Hackathon</p>
-  {% if step is defined %}
-  <ol class="progress" aria-label="Progress">
-    {% for n, label in [(1, 'Discord'), (2, 'Email'), (3, 'Credit')] %}
-    <li class="{% if step == n %}current{% elif step > n %}done{% endif %}"
-        {% if step == n %}aria-current="step"{% endif %}>
-      <span class="dot">{{ n }}</span>
-      <span class="label">{{ label }}</span>
-    </li>
-    {% endfor %}
-  </ol>
-  {% endif %}
   {% block content %}{% endblock %}
 </main>
 <script src="{{ asset('form.js') }}" defer></script>

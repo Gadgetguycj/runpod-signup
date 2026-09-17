@@ -355,6 +355,12 @@ def stats() -> dict:
         return {
             "visits": one("SELECT COUNT(*) AS n FROM visits"),
             "entries": one("SELECT COUNT(*) AS n FROM entries"),
+            "raffle_entries": one(
+                "SELECT COUNT(*) AS n FROM entries WHERE discord_username IS NOT NULL"
+            ),
+            "entries_without_discord": one(
+                "SELECT COUNT(*) AS n FROM entries WHERE discord_username IS NULL"
+            ),
             "links_total": total,
             "links_claimed": claimed,
             "links_remaining": total - claimed,
