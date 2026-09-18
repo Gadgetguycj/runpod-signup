@@ -76,7 +76,7 @@ def test_empty_pool_records_the_entry_without_a_link(client, auth):
 def test_no_invite_url_renders_a_disabled_button(client, monkeypatch):
     monkeypatch.delenv("DISCORD_INVITE_URL", raising=False)
     page = client.get("/")
-    assert "Invite link coming soon" in page.text
+    assert "Discord link coming soon" in page.text
     assert "disabled" in page.text
     assert "discord.gg" not in page.text
 
