@@ -38,6 +38,7 @@ templates.env.globals["asset"] = asset
 
 MAX_DISCORD_LENGTH = 64
 MAX_EMAIL_LENGTH = 254
+MAX_JOIN_CODE_LENGTH = 64
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -57,6 +58,17 @@ async def lifespan(app: FastAPI):
         log.warning("DISCORD_INVITE_URL is unset. The Discord button renders disabled.")
     if not config.admin_token():
         log.warning("ADMIN_TOKEN is unset. Every /admin route returns 503.")
+    if not config.join_code_set():
+        log.warning(
+            "JOIN_CODE is unset. THE CHANNEL CODE IS NOT CHECKED, so a Discord username"
+            " alone puts someone in the raffle."
+        )
+    elif len(config.join_code()) > MAX_JOIN_CODE_LENGTH:
+        log.warning(
+            "JOIN_CODE is %d characters. The field takes %d, so nobody can type it in full.",
+            len(config.join_code()),
+            MAX_JOIN_CODE_LENGTH,
+        )
     if not config.claims_open():
         log.warning("CLAIMS_OPEN is closed. Entries are recorded but no link is handed out.")
     log.info(
@@ -160,9 +172,13 @@ def step_discord(request: Request, restart: str = ""):
 
 
 @app.post("/email")
-def start_email_step(request: Request, discord_username: str = Form("")):
+def start_email_step(
+    request: Request, discord_username: str = Form(""), join_code: str = Form("")
+):
+    """Nothing here blocks. Both fields are optional and only decide the raffle."""
     session = read_session(request)
     session["d"] = discord_username.strip()[:MAX_DISCORD_LENGTH]
+    session["jc"] = join_code.strip()[:MAX_JOIN_CODE_LENGTH]
     session.pop("err", None)
     return redirect(request, "/email", session)
 
@@ -218,6 +234,7 @@ def submit(request: Request, email: str = Form(...), discord_username: str = For
     result = db.claim(
         address,
         discord,
+        join_code=session.get("jc") or "",
         ip_key=ip_key(request),
         per_ip_limit=config.claim_rate_limit_per_hour(),
         global_limit=config.global_claim_limit_per_hour(),
@@ -249,13 +266,25 @@ def result(request: Request):
             email=entry["raw_email"],
             discord=entry["discord_username"],
             returning=not session.get("new", False),
+            **code_state(entry),
         )
     return page(
         request,
         "no_link.html",
         email=entry["raw_email"],
         discord=entry["discord_username"],
+        **code_state(entry),
     )
+
+
+def code_state(entry: dict) -> dict:
+    """Whether a channel code was given, and whether it matches.
+
+    The raffle needs that and a Discord username. An unset JOIN_CODE accepts anything,
+    so the raffle then rests on the username alone.
+    """
+    code = entry["join_code"] or ""
+    return {"code_given": bool(code.strip()), "code_ok": config.join_code_accepted(code)}
 
 
 def email_problem(address: str) -> str | None:
@@ -305,6 +334,7 @@ def health(request: Request):
                 "links_total": counts["links_total"],
                 "links_remaining": counts["links_remaining"],
                 "discord_invite_set": bool(config.discord_invite_url()),
+                "join_code_set": config.join_code_set(),
                 "admin_configured": True,
             }
         )
@@ -361,6 +391,7 @@ async def admin_import_allowed(request: Request):
 @app.get("/admin/stats", dependencies=[Depends(require_admin)])
 def admin_stats():
     counts = db.stats()
+    counts["join_code_set"] = config.join_code_set()
     global_limit = config.global_claim_limit_per_hour()
     claimed_this_hour = db.claims_in_last_hour()
     counts["handout"] = {
@@ -395,7 +426,7 @@ def admin_entries_csv():
                 row["raw_email"],
                 row["normalized_email"],
                 row["discord_username"] or "",
-                "yes" if row["discord_username"] else "no",
+                "yes" if db.in_raffle(row) else "no",
                 row["claimed_link"] or "",
                 row["created_at"],
                 row["link_claimed_at"] or "",

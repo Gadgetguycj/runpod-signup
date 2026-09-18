@@ -1,12 +1,11 @@
 {% extends "base.html" %}
 {% from "_address.html" import address %}
+{% from "_raffle.html" import verdict as raffle %}
 {% block content %}
 <h1>You are on the list</h1>
 <p class="carried">We have you as <strong>{{ address(email) }}</strong></p>
 <p class="note">Your $15 credit link is not ready yet.</p>
 <p class="note good">Ask at the GalaxyGate table and we will get you one.</p>
-{% if discord %}
-<p class="note good">Your Discord username <strong>{{ discord }}</strong> is in the raffle for RunPod swag.</p>
-{% endif %}
+{{ raffle(code_given, code_ok, discord) }}
 <a class="back" href="/">That is wrong, start over</a>
 {% endblock %}

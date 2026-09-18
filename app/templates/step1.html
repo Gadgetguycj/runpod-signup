@@ -19,11 +19,15 @@
 {% endif %}
 
 <form method="post" action="/email">
+  <label for="join_code">Code from the Discord channel</label>
+  <input id="join_code" name="join_code" type="text" maxlength="64"
+         autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="text">
+
   <label for="discord_username">Discord username</label>
   <input id="discord_username" name="discord_username" type="text" maxlength="64"
          autocomplete="off" autocapitalize="none" spellcheck="false"
          inputmode="text" placeholder="yourname" value="{{ discord or '' }}">
-  <p class="help">This is what enters you in the raffle.</p>
+  <p class="help">The code and the username together enter you in the raffle.</p>
   <button class="button primary" type="submit">Next</button>
 </form>
 {% endblock %}

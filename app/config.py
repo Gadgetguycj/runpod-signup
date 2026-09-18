@@ -56,6 +56,28 @@ def claims_open() -> bool:
     return True
 
 
+def join_code() -> str:
+    """The code posted in the RunPod Discord channel. Empty means no gate."""
+    return (os.environ.get("JOIN_CODE") or "").strip()
+
+
+def join_code_set() -> bool:
+    return bool(join_code())
+
+
+def join_code_accepted(typed: str) -> bool:
+    """Whether a typed code may pass page one.
+
+    Surrounding whitespace and case are forgiven because people retype from a phone.
+    Nothing else is normalized. An unset JOIN_CODE accepts anything on purpose, so a
+    config slip at the event cannot stop every attendee getting a credit.
+    """
+    expected = join_code()
+    if not expected:
+        return True
+    return (typed or "").strip().lower() == expected.lower()
+
+
 def discord_invite_url() -> str:
     return (os.environ.get("DISCORD_INVITE_URL") or "").strip()
 

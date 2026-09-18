@@ -53,7 +53,7 @@ def test_stats_and_csv_export(client, auth):
     stats = client.get("/admin/stats", headers=auth).json()
     assert {k: v for k, v in stats.items() if k != "handout"} == {
         "visits": 1, "entries": 1, "raffle_entries": 1, "entries_without_discord": 0,
-        "links_total": 2, "links_claimed": 1, "links_remaining": 1}
+        "links_total": 2, "links_claimed": 1, "links_remaining": 1, "join_code_set": False}
 
     export = client.get("/admin/entries.csv", headers=auth)
     assert export.headers["content-type"].startswith("text/csv")

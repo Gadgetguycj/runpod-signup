@@ -2,18 +2,19 @@
 
 Signup page for the Coffee and Code AI Agent Hackathon, served at
 https://runpod.galaxygate.app. An attendee scans the QR code, optionally joins the
-RunPod Discord, gives an email, and gets a single use $15 RunPod credit link. Every
-entry is a row on the swag raffle list.
+RunPod Discord, gives an email, and gets a single use $15 RunPod credit link. A Discord
+username plus the code posted in the Discord channel is a row on the swag raffle list.
 
 Python 3.12, FastAPI, Jinja2, SQLite from the standard library with WAL. Server
 rendered, no build step, no client framework, no external fonts or CDNs.
 
 ## The flow
 
-1. `GET /` Discord step. Invite button plus a Discord username field. The username is
-   the raffle entry. The view is recorded in `visits`.
-2. `POST /email` then `303` to `GET /email`. The email step. The Discord username is
-   carried in a signed session cookie.
+1. `GET /` Discord step. Invite button, the channel code field, then a Discord username
+   field. Both are optional and neither blocks. Together they are the raffle entry. The
+   view is recorded in `visits`.
+2. `POST /email` then `303` to `GET /email`. The email step. Next always advances,
+   whatever was typed. The username and the code are carried in a signed session cookie.
 3. `POST /claim` then `303` to `GET /claim`. The result. Shows the personal credit link,
    or the "you are on the list" page, or the "we do not have that address" page when the
    allowlist is populated and does not contain the address.
@@ -30,6 +31,7 @@ too, while a tool that does not ask for HTML still gets JSON.
 | Name | Default | Effect |
 | --- | --- | --- |
 | `DISCORD_INVITE_URL` | unset | The Discord button target. Unset renders the button disabled with the text "Invite link coming soon" and logs a warning at startup. |
+| `JOIN_CODE` | unset | The code posted in the RunPod Discord channel, at most 64 characters. Typing it on page 1 is half a raffle entry and never affects a credit. Unset or empty turns the check off, so the field still renders and any code counts, and the app logs a warning at startup. |
 | `ADMIN_TOKEN` | unset | Bearer token for every `/admin` route. Unset makes the whole admin surface return 503 and say why. |
 | `DATA_DIR` | `/data` | Directory holding `signup.db` and `secret.key`. Mount a volume here. |
 | `SECRET_KEY` | generated | Signs the session cookie. Unset means one is generated on first start and kept in `DATA_DIR/secret.key`, so a restart does not log everybody out. |
@@ -41,6 +43,31 @@ A non-positive or unparseable number falls back to the default and logs a warnin
 typo cannot switch protection off or stop every handout.
 
 Copy `.env.example` to `.env` for a local run.
+
+## The channel code and the raffle
+
+A code is posted in a RunPod Discord channel and `JOIN_CODE` holds the expected value.
+The code is never in this repository. It gates the raffle and nothing else. Nobody is
+blocked, no page ever rejects what was typed, and a credit link does not depend on it.
+
+A raffle entry needs both halves, a matching code and a Discord username. Either half
+alone is not an entry. The comparison trims surrounding whitespace and folds case,
+because attendees retype it on a phone, and forgives nothing else. The typed code is
+stored with the entry and checked against `JOIN_CODE` when the draw list is read, so
+correcting a mistyped `JOIN_CODE` during the event corrects who is in the raffle.
+
+The result page and the "you are on the list" page say where a visitor stands. Both
+halves good and it names the username as being in the raffle. One half missing or a
+wrong code and it says plainly that they are not in the raffle and which half is at
+fault, never the code itself or anything about its shape. Neither half given and the
+raffle is not mentioned. Re-submitting the same email fixes it, since a later code or
+username replaces the stored one and a later blank leaves it alone, and the same credit
+link comes back every time.
+
+An unset or empty `JOIN_CODE` fails open on purpose. A config slip at the event must not
+cost the room the raffle, so every code then counts and the raffle rests on the username
+alone. `join_code_set` in `/admin/stats` and in the token authorized `/health` body says
+whether a code is set, and the startup log carries a warning when it is not.
 
 ## One link per person
 
@@ -187,6 +214,7 @@ curl -sS http://localhost:8000/admin/stats -H "Authorization: Bearer $ADMIN_TOKE
   "links_total": 50,
   "links_claimed": 41,
   "links_remaining": 9,
+  "join_code_set": true,
   "handout": {
     "claims_open": true,
     "per_address_limit_per_hour": 120,
@@ -209,10 +237,12 @@ head -2 raffle.csv
 Columns are `raw_email`, `normalized_email`, `discord_username`, `in_raffle`,
 `claimed_link`, `created_at`, `link_claimed_at`.
 
-The raffle entry is the Discord username, not the email. The email only pins a credit
-link to a person. `discord_username` is empty when none was given and `in_raffle` is
-then `no`, so the draw list is every row where `in_raffle` is `yes`. `/admin/stats`
-carries the same split as `raffle_entries` and `entries_without_discord`.
+The raffle entry is the Discord username plus the channel code, not the email. The email
+only pins a credit link to a person. `in_raffle` is `yes` only when the row has a
+username and its stored code matches `JOIN_CODE`, so the draw list is every row where
+`in_raffle` is `yes`. `/admin/stats` counts those as `raffle_entries`, while
+`entries_without_discord` counts rows with no username at all. The code itself is never
+exported.
 
 Pause and resume handouts without a restart, if you run it under compose:
 
@@ -228,7 +258,7 @@ curl -sS http://localhost:8000/health
 # {"status":"ok"}
 
 curl -sS http://localhost:8000/health -H "Authorization: Bearer $ADMIN_TOKEN"
-# {"status":"ok","links_total":3,"links_remaining":2,"discord_invite_set":true,"admin_configured":true}
+# {"status":"ok","links_total":3,"links_remaining":2,"discord_invite_set":true,"join_code_set":true,"admin_configured":true}
 ```
 
 ## Visit tracking
@@ -267,5 +297,6 @@ That request is stored as `144.172.70.0` with country `US`.
 
 Covers the normalization alias table, the returning visitor, concurrent claims, the
 empty pool, the allowlist in both states, admin 401 and 503, visit recording, the words
-on the empty pool page, browser back and reload and typed URLs, and the handout controls
-including a scripted loop against a normal attendee.
+on the empty pool page, browser back and reload and typed URLs, the channel code and the
+raffle rule in every combination and with no code set, and the handout controls including
+a scripted loop against a normal attendee.

@@ -119,14 +119,16 @@ def test_optionality_is_stated_once_and_only_on_the_heading(client):
     assert copy.count("optional") == 1
 
 
-# ---------- 4. the Discord username is the raffle entry ----------
+# ---------- 4. the raffle entry is the Discord username and the channel code ----------
 
 
-def test_page_one_says_the_discord_username_is_the_raffle_entry(client):
+def test_page_one_says_the_code_and_the_username_are_the_raffle_entry(client):
+    """Both halves. A username alone is no longer an entry."""
     html = client.get("/").text
     assert "<label for=\"discord_username\">Discord username</label>" in html
+    assert '<label for="join_code">Code from the Discord channel</label>' in html
     helper = re.search(r'<p class="help">(.*?)</p>', html, re.S).group(1).strip()
-    assert helper == "This is what enters you in the raffle."
+    assert helper == "The code and the username together enter you in the raffle."
     assert helper.count(".") == 1, "the helper must be one short line"
 
 

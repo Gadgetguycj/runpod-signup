@@ -5,6 +5,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from . import config
 from .emails import normalize_email
 
 SCHEMA = """
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS entries (
     raw_email TEXT NOT NULL,
     normalized_email TEXT NOT NULL UNIQUE,
     discord_username TEXT,
+    join_code TEXT,
     link_id INTEGER REFERENCES links(id),
     created_at TEXT NOT NULL,
     link_claimed_at TEXT
@@ -90,6 +92,9 @@ def init_db() -> None:
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(visits)")}
         if "country" not in columns:
             conn.execute("ALTER TABLE visits ADD COLUMN country TEXT")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(entries)")}
+        if "join_code" not in columns:
+            conn.execute("ALTER TABLE entries ADD COLUMN join_code TEXT")
     finally:
         conn.close()
 
@@ -133,9 +138,19 @@ def is_allowed(normalized: str) -> bool:
         conn.close()
 
 
+def in_raffle(row) -> bool:
+    """Both halves are needed. A username alone is not a raffle entry and nor is a code.
+
+    The typed code is stored and checked against JOIN_CODE here rather than at submit
+    time, so fixing a mistyped JOIN_CODE during the event corrects the draw list.
+    """
+    return bool(row["discord_username"]) and config.join_code_accepted(row["join_code"] or "")
+
+
 def claim(
     raw_email: str,
     discord_username: str | None,
+    join_code: str | None = None,
     ip_key: str = "unknown",
     per_ip_limit: int = 0,
     global_limit: int = 0,
@@ -163,9 +178,16 @@ def claim(
         returning = row is not None
         if row is None:
             cur = conn.execute(
-                "INSERT INTO entries (raw_email, normalized_email, discord_username, created_at)"
-                " VALUES (?, ?, ?, ?)",
-                (raw_email.strip(), normalized, (discord_username or "").strip() or None, now()),
+                "INSERT INTO entries"
+                " (raw_email, normalized_email, discord_username, join_code, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (
+                    raw_email.strip(),
+                    normalized,
+                    (discord_username or "").strip() or None,
+                    (join_code or "").strip() or None,
+                    now(),
+                ),
             )
             entry_id = cur.lastrowid
             link_id = None
@@ -180,6 +202,13 @@ def claim(
                 conn.execute(
                     "UPDATE entries SET discord_username = ? WHERE id = ?",
                     (discord_username.strip(), entry_id),
+                )
+            # The code is the other half of the raffle entry, so it follows the same
+            # rule. A later code replaces the stored one and a later blank leaves it.
+            if join_code and join_code.strip():
+                conn.execute(
+                    "UPDATE entries SET join_code = ? WHERE id = ?",
+                    (join_code.strip(), entry_id),
                 )
 
         if link_id is None:
@@ -356,12 +385,11 @@ def stats() -> dict:
 
         total = one("SELECT COUNT(*) AS n FROM links")
         claimed = one("SELECT COUNT(*) AS n FROM links WHERE claimed_by_entry_id IS NOT NULL")
+        entries = conn.execute("SELECT discord_username, join_code FROM entries").fetchall()
         return {
             "visits": one("SELECT COUNT(*) AS n FROM visits"),
             "entries": one("SELECT COUNT(*) AS n FROM entries"),
-            "raffle_entries": one(
-                "SELECT COUNT(*) AS n FROM entries WHERE discord_username IS NOT NULL"
-            ),
+            "raffle_entries": sum(1 for row in entries if in_raffle(row)),
             "entries_without_discord": one(
                 "SELECT COUNT(*) AS n FROM entries WHERE discord_username IS NULL"
             ),
@@ -377,7 +405,7 @@ def export_entries() -> list[sqlite3.Row]:
     conn = connect()
     try:
         return conn.execute(
-            "SELECT e.raw_email, e.normalized_email, e.discord_username,"
+            "SELECT e.raw_email, e.normalized_email, e.discord_username, e.join_code,"
             " l.url AS claimed_link, e.created_at, e.link_claimed_at"
             " FROM entries e LEFT JOIN links l ON l.id = e.link_id ORDER BY e.id"
         ).fetchall()
@@ -390,7 +418,8 @@ def find_entry(normalized: str) -> dict | None:
     conn = connect()
     try:
         row = conn.execute(
-            "SELECT e.raw_email, e.normalized_email, e.discord_username, l.url AS link_url"
+            "SELECT e.raw_email, e.normalized_email, e.discord_username, e.join_code,"
+            " l.url AS link_url"
             " FROM entries e LEFT JOIN links l ON l.id = e.link_id"
             " WHERE e.normalized_email = ?",
             (normalized,),

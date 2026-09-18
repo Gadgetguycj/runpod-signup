@@ -15,8 +15,12 @@ ADMIN_TOKEN = "test-token-abc123"
 
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch):
-    """Point the app at a fresh database for this test."""
+    """Point the app at a fresh database for this test.
+
+    JOIN_CODE is cleared, so the channel code check is off unless a test arms it.
+    """
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("JOIN_CODE", raising=False)
     db.init_db()
     return tmp_path
 

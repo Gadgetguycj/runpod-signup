@@ -108,6 +108,7 @@ def test_health_reports_pool_and_configuration_to_the_admin(client, auth):
         "links_total": 2,
         "links_remaining": 1,
         "discord_invite_set": True,
+        "join_code_set": False,
         "admin_configured": True,
     }
 

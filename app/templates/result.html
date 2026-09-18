@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_address.html" import address %}
+{% from "_raffle.html" import verdict as raffle %}
 {% block content %}
 <h1>{% if returning %}Here is your link again{% else %}Your $15 RunPod credit{% endif %}</h1>
 <p class="lead">Tap the link to redeem it on RunPod.</p>
@@ -8,9 +9,7 @@
 <button class="button copy" type="button" data-link="{{ link }}">Copy link</button>
 
 <p class="note">This link is yours alone. It works once, so do not share it.</p>
-{% if discord %}
-<p class="note good">Your Discord username <strong>{{ discord }}</strong> is in the raffle for RunPod swag.</p>
-{% endif %}
+{{ raffle(code_given, code_ok, discord) }}
 <p class="carried">We have you as <strong>{{ address(email) }}</strong></p>
 <a class="back" href="/">That is wrong, start over</a>
 

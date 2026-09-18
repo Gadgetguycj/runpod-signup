@@ -99,6 +99,9 @@ label {
   font-weight: 600;
 }
 
+/* Page one stacks two fields, so the second label needs air above it. */
+input + label { margin-top: 22px; }
+
 ::placeholder {
   color: #7e8698;
   opacity: 1;
