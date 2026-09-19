@@ -8,15 +8,30 @@
 {% endif %}
 <h1>Join the Raffle <span class="qualifier">(Optional)</span></h1>
 
-{% if invite %}
-<a class="button discord" href="{{ invite }}" target="_blank" rel="noopener noreferrer">
-  Get the code in Discord
-</a>
-{% else %}
-<button class="button discord" type="button" disabled aria-disabled="true">
-  Discord link coming soon
-</button>
-{% endif %}
+<ol class="steps">
+  <li>
+    {% if invite %}
+    <a class="button discord" href="{{ invite }}" target="_blank" rel="noopener noreferrer">
+      Join the RunPod Discord
+    </a>
+    {% else %}
+    <button class="button discord" type="button" disabled aria-disabled="true">
+      Discord link coming soon
+    </button>
+    {% endif %}
+  </li>
+  <li>
+    {% if code_url %}
+    <a class="button discord" href="{{ code_url }}" target="_blank" rel="noopener noreferrer">
+      Get the code
+    </a>
+    {% else %}
+    <button class="button discord" type="button" disabled aria-disabled="true">
+      Code link coming soon
+    </button>
+    {% endif %}
+  </li>
+</ol>
 
 <form method="post" action="/email">
   <label for="join_code">Code from the Discord channel</label>

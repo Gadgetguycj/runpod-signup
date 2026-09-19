@@ -416,10 +416,11 @@ def test_stats_and_health_report_the_code_as_unset(client, auth):
 # ---------- field order ----------
 
 
-def test_page_one_orders_the_button_then_the_code_then_the_username(client):
+def test_page_one_orders_both_links_then_the_code_then_the_username(client):
     html = client.get("/").text
     marks = [
-        html.index("Get the code in Discord"),
+        html.index("Join the RunPod Discord"),
+        html.index("Get the code"),
         html.index('id="join_code"'),
         html.index('id="discord_username"'),
         html.index(">Next<"),

@@ -191,3 +191,14 @@ input:focus-visible, .button:focus-visible, a:focus-visible {
   h1 { font-size: 23px; }
   .linkbox { font-size: 16px; }
 }
+
+.steps { list-style: none; counter-reset: step; padding: 0; margin: 0 0 8px; }
+.steps li { counter-increment: step; display: flex; align-items: center; gap: 12px; }
+.steps li::before {
+  content: counter(step);
+  flex: 0 0 28px; height: 28px; border-radius: 50%;
+  background: #2a3145; color: var(--ink);
+  font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.steps .button { flex: 1; }

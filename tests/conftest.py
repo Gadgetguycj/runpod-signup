@@ -29,6 +29,7 @@ def data_dir(tmp_path, monkeypatch):
 def client(data_dir, monkeypatch):
     monkeypatch.setenv("ADMIN_TOKEN", ADMIN_TOKEN)
     monkeypatch.setenv("DISCORD_INVITE_URL", "https://discord.gg/testinvite")
+    monkeypatch.setenv("DISCORD_CODE_URL", "https://discord.com/channels/1/2/3")
     with TestClient(app) as test_client:
         yield test_client
 

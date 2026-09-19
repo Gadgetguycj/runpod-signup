@@ -82,5 +82,14 @@ def discord_invite_url() -> str:
     return (os.environ.get("DISCORD_INVITE_URL") or "").strip()
 
 
+def discord_code_url() -> str:
+    """Link to the Discord message carrying the join code.
+
+    Only a member of the server can open it, which is the point: reading the
+    code is the proof they joined.
+    """
+    return (os.environ.get("DISCORD_CODE_URL") or "").strip()
+
+
 def admin_token() -> str:
     return (os.environ.get("ADMIN_TOKEN") or "").strip()

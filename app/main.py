@@ -166,6 +166,7 @@ def step_discord(request: Request, restart: str = ""):
         request,
         "step1.html",
         invite=config.discord_invite_url(),
+        code_url=config.discord_code_url(),
         discord=session.get("d", ""),
         restart=bool(restart),
     )
