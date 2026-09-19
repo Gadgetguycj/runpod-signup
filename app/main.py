@@ -243,6 +243,12 @@ def submit(request: Request, email: str = Form(...), discord_username: str = For
     )
     log_withheld(request, result)
     session.pop("blocked", None)
+    # Another entry holds that Discord username, so the result page has to say so. The
+    # credit link is unaffected, which is why this is remembered and not an error.
+    if result["username_refused"]:
+        session["ut"] = True
+    else:
+        session.pop("ut", None)
     session["e"] = result["normalized_email"]
     session["new"] = not result["returning"]
     return redirect(request, "/claim", session)
@@ -259,6 +265,7 @@ def result(request: Request):
     entry = db.find_entry(normalized)
     if entry is None:
         return redirect(request, "/", {})
+    username_refused = bool(session.get("ut"))
     if entry["link_url"]:
         return page(
             request,
@@ -267,6 +274,7 @@ def result(request: Request):
             email=entry["raw_email"],
             discord=entry["discord_username"],
             returning=not session.get("new", False),
+            username_refused=username_refused,
             **code_state(entry),
         )
     return page(
@@ -274,6 +282,7 @@ def result(request: Request):
         "no_link.html",
         email=entry["raw_email"],
         discord=entry["discord_username"],
+        username_refused=username_refused,
         **code_state(entry),
     )
 

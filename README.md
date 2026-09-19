@@ -62,7 +62,8 @@ wrong code and it says plainly that they are not in the raffle and which half is
 fault, never the code itself or anything about its shape. Neither half given and the
 raffle is not mentioned. Re-submitting the same email fixes it, since a later code or
 username replaces the stored one and a later blank leaves it alone, and the same credit
-link comes back every time.
+link comes back every time. A username another entry already holds is the one thing a
+re-submit cannot take, and that page says so too.
 
 An unset or empty `JOIN_CODE` fails open on purpose. A config slip at the event must not
 cost the room the raffle, so every code then counts and the raffle rests on the username
@@ -84,6 +85,33 @@ this up, one so a link can have only one owner and one so an entry can hold only
 link. A returning address gets its original link back. When no link is left the entry
 is still recorded and the page says the credit will be emailed. No link is ever
 invented.
+
+## One raffle entry per Discord username
+
+The email pins a credit link to a person. Without a second rule the raffle has no such
+pin, so one person enters many times by giving the same Discord name with a fresh
+address each time. The Discord username is held by one entry, the way the normalized
+email is.
+
+The username is normalized to trim surrounding whitespace, drop a single leading `@` and
+fold case. Nothing else. A Discord name is not an email address, so folding dots or
+underscores would merge two real people. The raw string as typed is stored for the page
+and the export, and the partial unique index sits on the normalized form, covering only
+rows where it is non-empty. Any number of entries with no username at all are legal.
+
+On submit the username resolves in this order. An empty one changes nothing. One already
+stored on this entry needs nothing done. A free one is stored, releasing whatever this
+entry held before. One another entry holds is not stored, this entry keeps what it had,
+and the result page says the username is already in the raffle without naming who holds
+it.
+
+None of that touches the credit. The refused visitor still reaches the email step, still
+gets their link, and a returning address still gets the same link back.
+
+The live database predates the column, so it arrives by migration and is backfilled from
+the stored usernames. Two rows that already collide once normalized cannot both hold the
+name. The oldest row keeps it and the newer one is left without a username. Nothing is
+deleted and the migration does not fail.
 
 ## Handout controls
 
@@ -298,5 +326,6 @@ That request is stored as `144.172.70.0` with country `US`.
 Covers the normalization alias table, the returning visitor, concurrent claims, the
 empty pool, the allowlist in both states, admin 401 and 503, visit recording, the words
 on the empty pool page, browser back and reload and typed URLs, the channel code and the
-raffle rule in every combination and with no code set, and the handout controls including
-a scripted loop against a normal attendee.
+raffle rule in every combination and with no code set, the one holder per Discord
+username rule with its migration, and the handout controls including a scripted loop
+against a normal attendee.

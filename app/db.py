@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import config
-from .emails import normalize_email
+from .emails import normalize_discord_username, normalize_email
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS links (
@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS entries (
     raw_email TEXT NOT NULL,
     normalized_email TEXT NOT NULL UNIQUE,
     discord_username TEXT,
+    normalized_discord_username TEXT,
     join_code TEXT,
     link_id INTEGER REFERENCES links(id),
     created_at TEXT NOT NULL,
@@ -56,6 +57,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS entries_one_link
     ON entries(link_id) WHERE link_id IS NOT NULL;
 """
 
+# Held by one entry at a time, the way the normalized email is. Rows with no username
+# are not covered, so any number of them are legal. This runs after the column
+# migration below, because a database written before the column cannot index it.
+USERNAME_INDEX = """
+CREATE UNIQUE INDEX IF NOT EXISTS entries_one_discord_username
+    ON entries(normalized_discord_username)
+    WHERE normalized_discord_username IS NOT NULL AND normalized_discord_username <> '';
+"""
+
 
 def data_dir() -> Path:
     return Path(os.environ.get("DATA_DIR", "/data"))
@@ -85,7 +95,8 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
-def init_db() -> None:
+def init_db() -> dict:
+    """Create or migrate the schema. Returns what the username backfill had to do."""
     conn = connect()
     try:
         conn.executescript(SCHEMA)
@@ -95,8 +106,50 @@ def init_db() -> None:
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(entries)")}
         if "join_code" not in columns:
             conn.execute("ALTER TABLE entries ADD COLUMN join_code TEXT")
+        if "normalized_discord_username" not in columns:
+            conn.execute("ALTER TABLE entries ADD COLUMN normalized_discord_username TEXT")
+        backfilled = _backfill_normalized_usernames(conn)
+        conn.executescript(USERNAME_INDEX)
+        return backfilled
     finally:
         conn.close()
+
+
+def _backfill_normalized_usernames(conn) -> dict:
+    """Fill the normalized username on rows written before the column existed.
+
+    Two live rows can already hold the same name once normalized. Only one of them may
+    keep it, so the oldest stays the holder and the newer row is left without a
+    username. Nothing is deleted and the migration never fails on a collision.
+    """
+    taken = {
+        row["normalized_discord_username"]
+        for row in conn.execute(
+            "SELECT normalized_discord_username FROM entries"
+            " WHERE normalized_discord_username IS NOT NULL"
+            " AND normalized_discord_username <> ''"
+        )
+    }
+    filled = 0
+    cleared = 0
+    rows = conn.execute(
+        "SELECT id, discord_username FROM entries"
+        " WHERE normalized_discord_username IS NULL AND discord_username IS NOT NULL"
+        " ORDER BY created_at, id"
+    ).fetchall()
+    for row in rows:
+        normalized = normalize_discord_username(row["discord_username"])
+        if normalized and normalized not in taken:
+            taken.add(normalized)
+            conn.execute(
+                "UPDATE entries SET normalized_discord_username = ? WHERE id = ?",
+                (normalized, row["id"]),
+            )
+            filled += 1
+        else:
+            conn.execute("UPDATE entries SET discord_username = NULL WHERE id = ?", (row["id"],))
+            cleared += 1
+    return {"filled": filled, "cleared": cleared}
 
 
 def record_visit(
@@ -141,6 +194,9 @@ def is_allowed(normalized: str) -> bool:
 def in_raffle(row) -> bool:
     """Both halves are needed. A username alone is not a raffle entry and nor is a code.
 
+    A username is only ever stored on the entry that holds it, so reading it here is
+    still a question about this row alone.
+
     The typed code is stored and checked against JOIN_CODE here rather than at submit
     time, so fixing a mistyped JOIN_CODE during the event corrects the draw list.
     """
@@ -166,25 +222,40 @@ def claim(
     and never counted, so reloading costs an attendee nothing. The gates below only
     decide whether a NEW link leaves the pool. An entry is always recorded either way,
     so the raffle is never affected and no visitor is ever refused.
+
+    A Discord username is held by one entry, so a name another entry already holds is
+    not stored and `username_refused` comes back true. That only costs the raffle. The
+    credit link is decided by the email and never by the username.
     """
     normalized = normalize_email(raw_email)
+    typed_username = (discord_username or "").strip()
+    normalized_username = normalize_discord_username(typed_username)
     conn = connect()
     gate = None
+    username_refused = False
     try:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
-            "SELECT id, link_id FROM entries WHERE normalized_email = ?", (normalized,)
+            "SELECT id, link_id, normalized_discord_username FROM entries"
+            " WHERE normalized_email = ?",
+            (normalized,),
         ).fetchone()
         returning = row is not None
         if row is None:
+            username_refused = bool(normalized_username) and (
+                _username_holder(conn, normalized_username) is not None
+            )
+            holds = bool(normalized_username) and not username_refused
             cur = conn.execute(
                 "INSERT INTO entries"
-                " (raw_email, normalized_email, discord_username, join_code, created_at)"
-                " VALUES (?, ?, ?, ?, ?)",
+                " (raw_email, normalized_email, discord_username,"
+                " normalized_discord_username, join_code, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     raw_email.strip(),
                     normalized,
-                    (discord_username or "").strip() or None,
+                    typed_username if holds else None,
+                    normalized_username if holds else None,
                     (join_code or "").strip() or None,
                     now(),
                 ),
@@ -196,13 +267,21 @@ def claim(
             link_id = row["link_id"]
             # The Discord username is the raffle entry, so a mistyped one has to be
             # correctable by redoing the form. A later non-empty username replaces the
-            # stored one. A later empty one leaves it alone, so someone re-submitting
-            # only to see their code again does not lose their raffle entry.
-            if discord_username and discord_username.strip():
-                conn.execute(
-                    "UPDATE entries SET discord_username = ? WHERE id = ?",
-                    (discord_username.strip(), entry_id),
-                )
+            # stored one, and taking a new name releases the one this entry held. A
+            # later empty one leaves it alone, so someone re-submitting only to see
+            # their code again does not lose their raffle entry. A name another entry
+            # holds is refused and this entry keeps whatever it had.
+            if normalized_username and normalized_username != (
+                row["normalized_discord_username"] or ""
+            ):
+                if _username_holder(conn, normalized_username) is None:
+                    conn.execute(
+                        "UPDATE entries SET discord_username = ?,"
+                        " normalized_discord_username = ? WHERE id = ?",
+                        (typed_username, normalized_username, entry_id),
+                    )
+                else:
+                    username_refused = True
             # The code is the other half of the raffle entry, so it follows the same
             # rule. A later code replaces the stored one and a later blank leaves it.
             if join_code and join_code.strip():
@@ -258,7 +337,16 @@ def claim(
         "returning": returning,
         "link_claimed_at": claimed_at,
         "withheld_because": gate,
+        "username_refused": username_refused,
     }
+
+
+def _username_holder(conn, normalized_username: str) -> int | None:
+    """The entry holding this normalized username, or None when nobody holds it."""
+    row = conn.execute(
+        "SELECT id FROM entries WHERE normalized_discord_username = ?", (normalized_username,)
+    ).fetchone()
+    return row["id"] if row else None
 
 
 def _handout_gate(conn, ip_key, per_ip_limit, global_limit, claims_open) -> str | None:

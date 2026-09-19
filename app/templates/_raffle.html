@@ -1,8 +1,10 @@
 {#- Where a visitor stands on the raffle. It takes both halves, the code from the Discord
     channel and a Discord username. Someone who gave neither hears nothing about the
     raffle. Anyone who gave one half is told plainly which half is missing or wrong so
-    they can redo the form, and never what the code is. -#}
-{% macro verdict(code_given, code_ok, discord) -%}
+    they can redo the form, and never what the code is. A username another entry already
+    holds is its own line, because a visitor who gave nothing else still has to hear it,
+    and it never names the entry that holds it. -#}
+{% macro verdict(code_given, code_ok, discord, username_refused=false) -%}
 {%- if code_given or discord -%}
 {%- if code_ok and discord %}
 <p class="note good">Your Discord username <strong>{{ discord }}</strong> is in the raffle for RunPod swag.</p>
@@ -13,8 +15,11 @@
 {%- else %} We do not have the code from the Discord channel.
 {%- endif %}
 {%- endif %}
-{%- if not discord %} We do not have your Discord username.{% endif %}
-Start over to fix it.</p>
+{%- if not discord and not username_refused %} We do not have your Discord username.{% endif %}
+{%- if not username_refused %} Start over to fix it.{% endif %}</p>
 {%- endif %}
+{%- endif %}
+{%- if username_refused %}
+<p class="note">That Discord username is already in the raffle under another email, so you are not entered under it. Start over with a different one, or ask at the GalaxyGate table if that name is yours.</p>
 {%- endif %}
 {%- endmacro -%}

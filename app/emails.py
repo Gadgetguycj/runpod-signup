@@ -1,4 +1,4 @@
-"""Email normalization used for the one link per person rule."""
+"""Normalization used for the one per person rules and for the visit log."""
 
 import ipaddress
 
@@ -21,6 +21,18 @@ def normalize_email(raw: str) -> str:
         local = local.replace(".", "")
         domain = "gmail.com"
     return f"{local}@{domain}"
+
+
+def normalize_discord_username(raw: str) -> str:
+    """Collapse a Discord username to the identity the unique index sits on.
+
+    Trim, drop a single leading at sign, lowercase. Nothing else. A Discord name is not
+    an email address, so folding dots or underscores here would merge two real people.
+    """
+    value = (raw or "").strip()
+    if value.startswith("@"):
+        value = value[1:]
+    return value.lower()
 
 
 def truncate_ip(ip: str | None) -> str | None:
